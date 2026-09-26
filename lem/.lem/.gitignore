@@ -1,0 +1,4 @@
+history/
+*.fasl
+logs/
+config.lisp

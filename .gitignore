@@ -1,0 +1,41 @@
+vim/.vim/plugged/
+
+vim/.vim/backup/
+vim/.vim/swap/
+vim/.vim/undo/
+vim/.vim/netrw/
+
+zsh/.zplugin/bin
+
+emacs/.emacs.d/*
+!emacs/.emacs.d/configuration
+!emacs/.emacs.d/init.el
+!emacs/.emacs.d/early-init.el
+
+zsh/.zplugin
+
+config/nvim/plugin/packer_compiled.lua
+
+*.mp4
+**/atuin-receipt.json
+config/chawan/cookies.txt
+config/chawan/history.uri
+
+# Local editor debris and application logs.
+*.log
+*.swp
+*.swo
+/.trash/
+
+# Herdr session state and cached release notes (including the pilot copy).
+**/herdr/session.json
+**/herdr/release-notes.json
+
+# Python helper test imports.
+__pycache__/
+
+# Device selectors belong to each machine, outside the shared configuration.
+**/audio-scarlett.conf
+
+# unpacked font files
+fonts/IosevkaCustom

@@ -1,0 +1,48 @@
+onboarding = false
+
+[theme]
+name = "terminal"
+auto_switch = false
+
+[keys]
+prefix = "ctrl+a"
+split_horizontal = "prefix+s"
+settings = "ctrl+shift+s"
+
+[[keys.command]]
+key = "prefix+m"
+type = "popup"
+command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/bin/herdr-pane-menu\""
+description = "Pane menu: move / rename / vertical focus / balance"
+width = "60%"
+height = "50%"
+
+[[keys.command]]
+key = "ctrl+h"
+type = "shell"
+command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/bin/herdr-layout\" left"
+description = "Focus left and maximize pane height"
+
+[[keys.command]]
+key = "ctrl+j"
+type = "shell"
+command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/bin/herdr-layout\" down"
+description = "Focus down and maximize pane height"
+
+[[keys.command]]
+key = "ctrl+k"
+type = "shell"
+command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/bin/herdr-layout\" up"
+description = "Focus up and maximize pane height"
+
+[[keys.command]]
+key = "ctrl+l"
+type = "shell"
+command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/bin/herdr-layout\" right"
+description = "Focus right and maximize pane height"
+
+[ui]
+status_indicators = "symbols"
+
+[ui.toast]
+delivery = "herdr"

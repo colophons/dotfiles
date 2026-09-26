@@ -1,0 +1,20 @@
+?(?_ ?_) /home/rosin/projects/hosta/modal/prelude.modal
+<> (:: ?s) ()
+
+:: (push contents of stack into a list)
+<> (#stack) (<stack ())
+<> (?a <stack ?s) (<stack (?a ?s))
+<> (<stack ?s) (?s)
+
+<> (program) (filter-header)
+<> ((# ?s) filter-header) ((# ?s))
+<> ((## ?s) filter-header) ((## ?s))
+<> ((### ?s) filter-header) ((### ?s))
+<> ((#### ?s) filter-header) ((#### ?s))
+<> ((##### ?s) filter-header) ((##### ?s))
+<> (?s filter-header) ()
+<> ((EOF ()) program .read-until-eof) ()
+<> (.read-until-eof) (. #read-to-list program .read-until-eof)
+
+22325-Migrate-Azure-Redis.md #setinput
+.read-until-eof (' (#stack)) [i]

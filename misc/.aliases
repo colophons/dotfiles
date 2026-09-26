@@ -1,0 +1,419 @@
+#! /bin/zsh
+
+SHELLRC="$HOME/.zshrc"
+BROWSER="firefox"
+
+alias feh_browse='feh -g 640x480 -d -S filename'
+alias bfg='java -jar ~/.local/bin/bfg.jar'
+
+alias datestamp='date +%y-%m-%d'
+alias ls='/usr/bin/ls --color=auto'
+alias latr='ls -latr'
+alias gits='git status'
+alias gita='gits ; git add'
+alias gitm='gits ; git commit -m'
+alias gitr='gits ; git rebase -i master'
+alias bkt1h='bkt --ttl=60m'
+alias bkt1m='bkt --ttl=1m'
+alias modal_repl='modal ~/bin/repl.modal'
+alias ufcli='uxncli ~/roms/uf.rom'
+alias ufgui='uxn2 ~/roms/uf.rom'
+alias ufx='uxn2 ~/roms/ufx.rom'
+alias drifblim='uxn2 ~/roms/drifblim.rom'
+
+function exists-f() {
+  if [ ! -f "$1" ]; then
+    printf "no such file $1" 1&>2;
+    return 1;
+  fi
+  return 0;
+}
+
+function uxnrun() {
+  local tal="$1"
+  local rom="${tal%.tal}.rom"
+  exists-f "$tal" || return 1;
+  uxnasm "$tal" "$rom" && uxnemu "$rom"
+}
+
+function uxndbg() {
+  local tal="$1"
+  local rom="${tal%.tal}.rom"
+  exists-f "$tal" || return 1;
+  uxnasm "$tal" "$rom" && uxnemu -2x ~/roms/beetbug.rom "$rom"
+}
+
+alias calendar="cd ~/uxn && uxnemu ~/uxn/roms/calendar.rom"
+alias notepad="cd ~/uxn && uxnemu ~/uxn/roms/notepad.rom"
+
+# export KITTY_DOCS="$HOME/.local/kitty.app/share/doc/kitty/html"
+export KITTY_DOCS="/usr/share/doc/kitty/html"
+alias kitty_docs='cha "$KITTY_DOCS/$(ls $KITTY_DOCS | grep .html | gum choose)"'
+alias kchoose='kubectl config use-context $(gum choose $(kubectl config get-contexts -o name))'
+alias arch-wiki='BROWSER=cha /usr/bin/arch-wiki'
+
+function urlencode() {
+  to_encode="$@"
+  printf "$to_encode" | jq -sRr @uri
+}
+
+function foreal() {
+  do_this="$@"
+  gum confirm "$do_this" && sh -c "$do_this"
+}
+
+function duckduckgo() {
+  uri_stem="https://lite.duckduckgo.com/lite/?kp=-1&kd=-1&q="
+  search="$@"
+  encoded="$(printf %s "$search" | jq -sRr @uri)"
+  full_uri="${uri_stem}${encoded}"
+  echo "$full_uri"
+  cha "$full_uri"
+}
+
+function gitamp() {
+  msg="$1"
+  git add .
+  git commit -m "$msg"
+  git push
+}
+
+function jumpk8s() {
+  # a busybox pod named "jump" that lives for 1 hour
+    local namespace="dev"
+    local spec='{"apiVersion":"v1","kind":"Pod","metadata":{"name":"jump"},"spec":{"containers":[{"name":"busybox","image":"progrium/busybox","imagePullPolicy": "IfNotPresent", "command":["sleep","3600"]}]}}'
+    if [ -n "$1" ]; then
+      namespace="$1"
+    fi
+    which kubectl >/dev/null || return 1
+    which gum >/dev/null || return 1
+
+    # print diagnostic stuff
+    echo "using namespace $namespace for context $(kubectl config current-context)"
+    which yq >/dev/null && printf $spec | yq -p json -o yaml
+
+    echo "printf $spec | kubectl apply -n $namespace -f -"
+    printf $spec | kubectl apply -n $namespace -f -
+
+    # wait for pod to be ready
+    gum spin --spinner moon --title "Waiting for pod" \
+      -- kubectl wait --for=condition=Ready pod/jump -n $namespace
+
+    # get shell into pod
+    kubectl exec -i -t -n "$namespace" jump -- sh -c "clear; (bash || ash || sh)"
+
+    # clean up pod
+    gum confirm "delete pod ${namespace}/jump?" && \
+      gum spin --spinner moon --title "Killing $namespace/jump..." \
+      -- kubectl delete pod -n "$namespace" jump
+}
+
+function k8snmapper() {
+  # a pod named "nmapper" that lives for 1 hour
+    local namespace="app"
+    local podname="nmapper"
+    local spec='{
+      "apiVersion":"v1",
+      "kind":"Pod",
+      "metadata":{"name":"nmapper"},
+      "spec":{"containers":[
+        {
+          "name":"nmapper",
+          "image":"jonlabelle/network-tools",
+          "imagePullPolicy": "IfNotPresent",
+          "command":["sleep","3600"]
+        }
+      ]}}'
+
+    if [ -n "$1" ]; then
+      namespace="$1"
+    fi
+
+    which gum >/dev/null || return 1
+    which kubectl >/dev/null || return 1
+    echo "using namespace $namespace for context $(kubectl config current-context)"
+    which yq >/dev/null && printf "$spec" | yq -p json -o yaml
+    echo "printf $spec | kubectl apply -n $namespace -f -"
+    printf "$spec" | kubectl apply -n $namespace -f -
+    gum spin --spinner moon --title "Waiting for pod $namespace/$podname" -- kubectl wait --for=condition=Ready pod/$podname -n $namespace
+    kubectl exec -i -t -n "$namespace" "$podname" -- sh -c "clear; (bash || ash || sh)"
+
+    gum confirm "delete pod ${namespace}/${podname}?" && \
+      gum spin --spinner monkey --title "Killing $namespace/$podname..." -- \
+      kubectl delete pod -n "$namespace" $podname
+}
+
+function goto() {
+  if [ -z "$1" ]; then
+    echo "usage: goto <filename_substring>"
+    return 1;
+  fi
+  local pattern=$(printf '*%s*' $1)
+  echo "finding $pattern"
+  local filename=$(find -iname "$pattern")
+  if [ -z "$filename" ]; then
+    echo "no file resembling $pattern in dirtree"
+    return 1;
+  else
+    local directory="$(dirname $filename)"
+    echo "found $filename; going to $directory"
+    cd $directory
+  fi
+}
+
+function giddy() {
+  new_branch="$1"
+  echo -e "\033[0;32m:: stash ::\033[0m"
+  git stash 
+  echo -e "\033[0;32m:: checkout master and pull ::\033[0m"
+  git checkout master 
+  git pull 
+  echo -e "\033[0;32m:: stash pop ::\033[0m" 
+  git stash pop
+  if [ ! -z "$new_branch" ]; then
+    echo -e "\033[0;32m:: checkout new branch '$new_branch' ::\033[0m" 
+    git checkout -b "$new_branch"
+  fi
+}
+
+alias envy='source env/bin/activate'
+function mise-activate() {
+  type mise >/dev/null || {
+    print -u2 "mise not found"
+    return 1
+  }
+  eval "$(mise activate zsh)"
+}
+alias datestamp='date "+%Y-%m-%d"'
+alias datetimestamp='date "+%Y-%m-%d-%H:%M:%S"'
+
+alias sbcl_with_nvlime='sbcl --load $HOME/common-lisp/nvlime/lisp/start-nvlime.lisp'
+
+alias transfer='rsync -a --relative --human-readable --progress'
+
+alias ipshow="ip addr show | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p'"
+alias writ='mkdir -p $HOME/writing ; $EDITOR -c "Goyo" $HOME/writing/$(datestamp).txt'
+alias monolith-degoog='monolith -I -B -d .googleusercontent.com -d googleanalytics.com -d .google.com'
+
+alias localalias='cat ~/.localaliases '
+alias today='nvim $(date +%y-%m-%d).txt'
+alias lsports='sudo lsof -i -P -n | grep LISTEN'
+
+# generates a QR code from keyboard text and displays it with feh
+alias clipqr='qrencode -o - "$(xsel -b)" | feh - --title "$(xsel -b)"'
+
+stow-clpkg() {
+  PKGNAME="$1"
+  STOWDIR="$HOME/common-lisp/development/$PKGNAME"
+  mkdir -pv "$STOWDIR"
+  stow --verbose=2 -t "$STOWDIR" "$PKGNAME"
+}
+
+scrsh() {
+  DIR="$HOME/Pictures/Screenshots"
+  mkdir -pv "$DIR" 
+  pre="$1"
+  fmt='%Y-%m-%d.%H:%S'
+  filename=
+  if [ -z "$pre" ]; then
+    filename="$DIR/$fmt"'.$wx$h.png'
+  else
+    filename="$DIR/$fmt.$pre"'.$wx$h.png'
+  fi
+  echo $filename
+  scrot -s "$filename"
+
+  #if [ -z "$pre" ]; then
+  #  echo scrot -s "$DIR/"'%Y-%m-%d_$wx$h.png'
+  #  scrot -s "$DIR/"'%Y-%m-%d_$wx$h.png'
+  #else
+  #  echo scrot -s "$DIR/$pre.$fmt"'_$wx$h.png'
+  #  scrot -s "$DIR/"'%Y-%m-%d_$wx$h.png'
+  #fi
+}
+
+trash() {
+  TRASHDIR="$HOME/archive/trash"
+  SRCFILE="$(basename $1)"
+  TRASHFILE="$TRASHDIR/$SRCFILE.zip"
+  [[ ! (-f "$SRCFILE" || -d "$SRCFILE") ]] && printf "invalid file $SRCFILE \n" && return 1
+  mkdir -p "$TRASHDIR"
+  if [ -d "$TRASHFILE"  ]; then
+    printf "trashing directory $SRCFILE to $TRASHFILE\n"
+  else
+    printf "trashing file $SRCFILE to $TRASHFILE\n"
+  fi
+  zip -rv  "$TRASHFILE" "$SRCFILE"
+  if [ -f "$TRASHFILE" ]; then
+    printf "trash file $TRASHFILE now exists\n"
+    printf "you may now delete file $SRCFILE\n"
+    return 0
+  else
+    printf "$TRASHFILE does not exist; did something go wrong?\n"
+    return 1
+  fi
+}
+
+edrc() {
+  rcfile="$1"
+  [[ ! -f "$rcfile" ]] && printf "invalid file" && return 1
+  $EDITOR "$rcfile" 
+  echo "sourcing $SHELLRC"
+  source "$SHELLRC"
+}
+
+svroot() {
+  cmd="$1"
+  service="$2"
+  echo "sudo sv $cmd /run/runit/service/$service"
+  sudo sv "$cmd" "/run/runit/service/$service"
+}
+
+svuser() {
+  cmd="$1"
+  service="$2"
+  echo "sv $cmd $HOME/service/$service"
+  sv "$cmd" "$HOME/service/$service"
+}
+
+svuser_create(){
+  service="$1"
+  sv_definition_dir="$HOME/runsvdir/${service}"
+  sv_rundir="$HOME/service"
+  echo ln -s "$sv_definition_dir" "$sv_rundir"
+  ln -s "$sv_definition_dir" "$sv_rundir"
+}
+
+git-open-azure(){
+   ssh_url="$(git remote get-url origin)"
+   https_url="${ssh_url#git@ssh.dev.azure.com:v3/}"
+   https_url="https://dev.azure.com/${https_url%/}"
+   https_url="${https_url%/}/_git/${https_url##*/}"
+   echo "opening $https_url"
+   $BROWSER "$https_url" 
+}
+
+get-first-pod() {
+  name="$1"
+  [[ -z "$2" ]] && namespace="dev" || namespace="$2"
+  pod="$(kubectl get pods -n $namespace | grep $name | awk 'NR==1{ print $1 }' )"
+  echo "Got pod $pod" 1>&2
+  printf "$pod"
+}
+
+get-pod-env() {
+  name="$1"
+  [[ -z "$2" ]] && namespace="dev" || namespace="$2"
+  pod=$(get-first-pod $name $namespace)
+  echo kubectl exec -n $namespace $pod -- env
+  kubectl exec -n $namespace $pod -- env
+}
+
+get-pod-shell() {
+  name="$1"
+  [[ -z "$2" ]] && namespace="dev" || namespace="$2"
+  pod=$(get-first-pod $name $namespace)
+  echo kubectl exec -it -n $namespace $pod -- sh
+  kubectl exec -it -n $namespace $pod -- sh
+}
+
+get-pod-logs() {
+  name="$1"
+  [[ -z "$2" ]] && namespace="dev" || namespace="$2"
+  pod=$(get-first-pod $name $namespace)
+  echo kubectl logs -f -n $namespace $pod
+  kubectl logs -f -n $namespace $pod
+}
+
+# loads an environment file into the shell
+# careful with your secrets lol lmao
+feed-env() {
+  envfile="$1"
+  [[ -z "$envfile" ]] && envfile=".env"
+  [[ ! -f "$envfile" ]] && printf "invalid file $envfile" && return 1
+  echo "using envfile $envfile"
+
+  # echo $(grep -v '^#' "$envfile" | xargs)
+  export $(grep -v '^#' "$envfile" | xargs)
+}
+
+
+first() {
+  pattern="$1"
+  [[ -z "$pattern" ]] && echo "no pattern provided" && return 1
+  first_file_with_pattern="$(ag -g $pattern | sort | head -n 1)"
+  echo "Found $first_file_with_pattern" 1>&2
+  printf "$first_file_with_pattern"
+}
+
+alias build_sln='dotnet build $(find . -name "*.sln" | head -n 1)'
+alias release_sln='dotnet pack $(find . -name "*.sln" | head -n 1) --configuration Release'
+
+find-and-replace() {
+  SEARCH="$1"
+  REPLACE="$2"
+  echo "Found \"$SEARCH\" in the following files:"
+  ag -l "$SEARCH"
+  echo "ag -l \"$SEARCH\" | xargs -I FILE sed -i \"s/${SEARCH}/${REPLACE}/g\" FILE"
+  echo "Ctrl-C to cancel?"
+  read
+  ag -l "$SEARCH" | xargs -I FILE sed -i "s/${SEARCH}/${REPLACE}/g" FILE
+}
+
+# audio-rm() {
+#  # takes an input video, and strips out all audio streams
+#  # ffmpeg -i input_file.mp4 -vcodec copy -an output_file.mp4
+# }
+# 
+# video-concat() {
+#   # ffmpeg -f concat -i mylist.txt -c copy output.mkv
+# }
+
+function git-tidy-branches() {
+    git checkout master \
+      && git fetch -p \
+      && git remote prune origin \
+      && git branch -vv \
+      | grep ': gone]' \
+      | grep -v '\*' \
+      | awk '{ print $1 }' \
+      | xargs -I{} git branch -D {}
+
+    echo "[ :: remaining branches :: ]"
+
+    git branch
+}
+
+function playground-c() {
+  mkdir -p /tmp/cees
+  local INPUT="$1";
+  local FLAGS="$2";
+  local OUTPUT="$(mktemp -p /tmp/cees)"
+  local SRC="${OUTPUT}.c"
+  local txt="
+  #include <stdio.h>
+  int main(void) {
+    $INPUT
+  }"
+echo $txt > "$SRC"
+echo "$SRC :: \n$txt"
+  cc "$SRC" -o "$OUTPUT"
+  echo "::::"
+  $OUTPUT
+}
+
+function log_err() {
+    gum log -l error $1
+    return 1
+}
+
+function reload_firefox() {
+    which xdotool || return 1
+    CURRENT_WINDOW=$(xdotool getactivewindow)
+    KEY="CTRL+R"
+    BROWSER="Firefox"
+    xdotool search --desktop 0 ${BROWSER} windowactivate
+    xdotool key ${KEY}
+    xdotool windowfocus --sync ${CURRENT_WINDOW}
+    xdotool windowactivate --sync ${CURRENT_WINDOW}
+}

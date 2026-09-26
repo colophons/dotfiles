@@ -1,0 +1,20 @@
+?(?> ?>) <stderr>
+<> (?1 ?0 `?:) ?:
+<> (?x ?y swap) (?y ?x)
+<> (?: print) ?:
+<> (0 bits) 0
+<> (1 bits) 1
+<> (?n bit-byte) ((
+    ?n 128 `& 128 swap `/
+    ?n 64 `& 64 swap `/
+    ?n 32 `& 32 swap `/
+    ?n 16 `& 16 swap `/
+    ?n 8 `& 8 swap `/
+    ?n 4 `& 4 swap `/
+    ?n 2 `& 2 swap `/
+    ?n 1 `& 1 swap `/
+  ) (' (.join)) [i])
+<> (?^ .join) (?^)
+<> ((' ?.) [i]) ?.
+(10 bit-byte) 
+

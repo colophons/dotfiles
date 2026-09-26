@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+config=${AUDIO_SCARLETT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/audio-scarlett.conf}
+if [ ! -r "$config" ]; then
+  printf 'Missing local audio configuration: %s\n' "$config" >&2
+  exit 1
+fi
+card=
+sink=
+source=
+. "$config"
+: "${card:?Set card in the local audio configuration}"
+: "${sink:?Set sink in the local audio configuration}"
+
+if ! pactl list short cards | awk '{print $2}' | grep -qx "$card"; then
+  echo "Scarlett card not present: $card" >&2
+  exit 1
+fi
+
+pactl set-card-profile "$card" pro-audio
+pactl set-default-sink "$sink"
+pactl set-sink-volume "$sink" 90%
+pactl set-sink-mute "$sink" 0
+
+if [ -n "$source" ] && pactl list short sources | awk '{print $2}' | grep -qx "$source"; then
+  pactl set-default-source "$source"
+fi
+
+printf 'sink: %s\n' "$(pactl get-default-sink)"
+printf 'source: %s\n' "$(pactl get-default-source)"
+pactl get-sink-volume "$sink"
+pactl get-sink-mute "$sink"

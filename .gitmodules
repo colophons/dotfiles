@@ -1,0 +1,3 @@
+[submodule "fonts/Iosevka"]
+	path = fonts/Iosevka
+	url = https://github.com/be5invis/Iosevka.git

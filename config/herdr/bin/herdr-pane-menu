@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Herdr popup menu; targets the pane captured by the keybinding invocation."""
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+def api(*args):
+    command = [os.environ.get("HERDR_BIN_PATH") or "herdr", *args]
+    result = subprocess.run(command, text=True, capture_output=True, timeout=15)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Herdr command failed")
+    response = json.loads(result.stdout)
+    if "error" in response:
+        raise RuntimeError(str(response["error"]))
+    return response["result"]
+
+
+def display(text):
+    # Keep labels on one line and do not render terminal control sequences.
+    return "".join(c if c.isprintable() else " " for c in str(text))
+
+
+def finder(rows, prompt, header, *options):
+    env = os.environ.copy()
+    # User fzf defaults must not introduce multi-select, previews, or key actions.
+    for key in ("FZF_DEFAULT_OPTS", "FZF_DEFAULT_OPTS_FILE", "FZF_DEFAULT_COMMAND"):
+        env.pop(key, None)
+    result = subprocess.run(
+        ["fzf", "--layout=reverse", "--no-sort", "--no-multi", "--no-mouse",
+         "--info=hidden", "--prompt", prompt, "--header", header,
+         "--bind", "esc:abort,ctrl-c:abort,ctrl-g:abort", *options],
+        input="\n".join(rows) + "\n", text=True, stdout=subprocess.PIPE, env=env,
+    )
+    if result.returncode in (1, 130):
+        return None
+    if result.returncode:
+        raise RuntimeError(f"fzf failed (exit {result.returncode})")
+    return result.stdout.splitlines()
+
+
+def choose(items, prompt, header):
+    # Select by an internal index, never by a potentially duplicate tab label.
+    rows = [f"{i}\t{display(label)}" for i, (_, label) in enumerate(items)]
+    result = finder(rows, prompt, header, "--delimiter=\t", "--with-nth=2..")
+    if not result:
+        return None
+    return items[int(result[0].split("\t", 1)[0])][0]
+
+
+def main():
+    pane_id = os.environ.get("HERDR_ACTIVE_PANE_ID")
+    if not pane_id:
+        raise RuntimeError("Open this menu with the Herdr keybinding; no active pane was supplied.")
+    # Explicit invocation context, not the popup or a later global focus value.
+    pane = api("pane", "get", pane_id)["pane"]
+    heading = f"Pane {pane_id} • Enter selects • Esc cancels"
+    action = choose([
+        ("move", "Move to tab…"), ("rename", "Rename…"),
+        ("focus", "Vertically focus this pane"), ("balance", "Balance all panes"),
+    ], "Pane > ", heading)
+    if action == "move":
+        # Re-read topology in case the pane moved while the first menu was open.
+        pane = api("pane", "get", pane_id)["pane"]
+        tabs = api("tab", "list", "--workspace", pane["workspace_id"])["tabs"]
+        destinations = [
+            (tab["tab_id"], f'{tab["number"]}: {tab["label"]}  ({tab["pane_count"]} panes)')
+            for tab in tabs if tab["tab_id"] != pane["tab_id"]
+        ]
+        destinations.append(("new", "+ New tab"))
+        target = choose(destinations, "Move to > ", "Move pane and follow it • Esc cancels")
+        if target is None:
+            return
+        if target == "new":
+            result = api("pane", "move", pane_id, "--new-tab", "--focus")
+        else:
+            result = api("pane", "move", pane_id, "--tab", target, "--split", "right", "--focus")
+        move = result["move_result"]
+        if not move["changed"]:
+            raise RuntimeError(f'Pane was not moved: {move.get("reason", "unknown reason")}')
+    elif action == "rename":
+        pane = api("pane", "get", pane_id)["pane"]
+        result = finder(
+            ["Enter saves • empty name clears the custom label"], "Name > ",
+            "Rename pane • Ctrl+U clears • Esc cancels", "--disabled", "--print-query",
+            "--query", pane.get("label") or "",
+        )
+        if result is None:
+            return
+        name = result[0].strip()
+        if name:
+            # End option parsing: names starting with '-' remain literal labels.
+            api("pane", "rename", pane_id, "--", name)
+        else:
+            api("pane", "rename", pane_id, "--clear")
+    elif action in ("focus", "balance"):
+        result = subprocess.run(
+            [str(Path(__file__).with_name("herdr-layout")), action],
+            text=True, capture_output=True, timeout=30,
+        )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "Layout adjustment failed")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except (OSError, ValueError, KeyError, IndexError, RuntimeError, subprocess.TimeoutExpired) as error:
+        print(f"\nPane menu: {display(error)}", file=sys.stderr)
+        if sys.stdin.isatty():
+            try:
+                input("\nPress Enter to close…")
+            except (EOFError, KeyboardInterrupt):
+                pass
+        sys.exit(1)

@@ -1,0 +1,74 @@
+# Native terminal multiplexing, following archive-config/kitty/kitty.conf.
+
+# Appearance
+font-family = Iosevka Custom
+background-opacity = 0.95
+
+# Match Kitty's disabled update checks and audio bell. Keep Ghostty's visual
+# bell indicators (attention/title) available.
+auto-update = off
+bell-features = no-system,no-audio
+
+# New surfaces should behave like Kitty's *_with_cwd actions. Ghostty's shell
+# integration reports the current directory to the terminal.
+shell-integration = detect
+window-inherit-working-directory = true
+tab-inherit-working-directory = true
+split-inherit-working-directory = true
+
+# Splits
+# Kitty's hsplit draws a horizontal divider (new pane below); vsplit draws a
+# vertical divider (new pane to the right).
+keybind = ctrl+alt+a>s=new_split:down
+keybind = ctrl+alt+a>v=new_split:right
+keybind = ctrl+alt+a>enter=new_split:auto
+
+# Split navigation
+keybind = ctrl+alt+a>k=goto_split:up
+keybind = ctrl+alt+a>j=goto_split:down
+keybind = ctrl+alt+a>h=goto_split:left
+keybind = ctrl+alt+a>l=goto_split:right
+keybind = ctrl+alt+a>right_bracket=goto_split:next
+keybind = ctrl+alt+a>left_bracket=goto_split:previous
+
+# Tabs
+keybind = ctrl+alt+a>c=new_tab
+keybind = ctrl+alt+a>g>t=next_tab
+keybind = ctrl+alt+a>g>shift+t=previous_tab
+keybind = ctrl+alt+a>n=next_tab
+keybind = ctrl+alt+a>shift+n=previous_tab
+keybind = ctrl+alt+a>p=previous_tab
+
+# Resize mode: Ctrl+q, = enters the mode; h/j/k/l can be repeated. Press = to
+# equalize every split, or Escape to leave the mode. An unknown key also exits.
+keybind = ctrl+alt+a>equal=activate_key_table:resize
+keybind = resize/h=resize_split:left,10
+keybind = resize/j=resize_split:down,10
+keybind = resize/k=resize_split:up,10
+keybind = resize/l=resize_split:right,10
+keybind = resize/equal=equalize_splits
+keybind = chain=deactivate_key_table
+keybind = resize/escape=deactivate_key_table
+keybind = resize/catch_all=deactivate_key_table
+
+# Configuration and diagnostics
+keybind = ctrl+alt+a>r=reload_config
+keybind = ctrl+alt+a>ctrl+r=inspector:toggle
+keybind = ctrl+alt+a>f3=open_config
+
+# Scrollback. Alt+V opens the complete scrollback with the system text editor,
+# which is the closest native equivalent to kitty_grab.
+# Ghostty retains text and Kitty-protocol images independently for each split;
+# its defaults are 10 MB of text and 320 MB of image data per terminal surface.
+keybind = alt+v=write_scrollback_file:open
+keybind = ctrl+alt+u=scroll_page_up
+keybind = ctrl+alt+d=scroll_page_down
+
+# Do not let this common accidental chord close a surface.
+keybind = ctrl+alt+w=ignore
+
+# Ghostty 1.3 has no native equivalents for Kitty's move_window_to_* or
+# detach_window actions, and no Kitty-style Unicode input overlay.
+
+config-file = ?auto/theme.ghostty
+window-decoration = server

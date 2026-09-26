@@ -1,0 +1,8 @@
+include "%L"
+
+<Multi_key> <:> <o> : "ö"
+<Multi_key> <:> <u> : "ü"
+<Multi_key> <g> <a> : "α"
+<Multi_key> <g> <b> : "β"
+<Multi_key> <g> <g> : "γ"
+<Multi_key> <parenleft> <t> <u> <parenright> : "㋡" U32E1 # CIRCLED KATAKANA TU

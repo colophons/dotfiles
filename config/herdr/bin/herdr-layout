@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Live-pane balance and directional vertical focus for Herdr 0.9.
+
+Only reads topology, sets split ratios, changes focus, and unzooms. Never uses
+layout.apply, pane.move, or anything that creates/closes terminals.
+"""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+
+
+class Client:
+    def __init__(self, path):
+        self.path = path
+
+    def call(self, method, **params):
+        request = {"id": "herdr-layout", "method": method, "params": params}
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(5)
+            sock.connect(self.path)
+            sock.sendall(json.dumps(request).encode() + b"\n")
+            with sock.makefile("rb") as reader:
+                data = reader.readline(4 * 1024 * 1024)
+        response = json.loads(data)
+        if "error" in response:
+            raise RuntimeError(str(response["error"]))
+        return response["result"]
+
+
+def shape(node):
+    """Identity and structure only; ratios and presentation metadata may change."""
+    if node["type"] == "pane":
+        return node["pane_id"]
+    return (node["direction"], shape(node["first"]), shape(node["second"]))
+
+
+def find_path(node, pane_id):
+    if node["type"] == "pane":
+        return [] if node["pane_id"] == pane_id else None
+    for side, key in ((False, "first"), (True, "second")):
+        path = find_path(node[key], pane_id)
+        if path is not None:
+            return [side, *path]
+    return None
+
+
+def span(node, direction):
+    """Number of slots along an axis: stacked rows don't consume extra width."""
+    if node["type"] == "pane":
+        return 1
+    a, b = span(node["first"], direction), span(node["second"], direction)
+    return a + b if node["direction"] == direction else max(a, b)
+
+
+def balanced_ratio(node):
+    a = span(node["first"], node["direction"])
+    b = span(node["second"], node["direction"])
+    return min(0.9, max(0.1, a / (a + b)))
+
+
+def balance_plan(node, path=()):
+    if node["type"] == "pane":
+        return []
+    return [(path, balanced_ratio(node)),
+            *balance_plan(node["first"], (*path, False)),
+            *balance_plan(node["second"], (*path, True))]
+
+
+def vertical_plan(root, pane_id):
+    target = find_path(root, pane_id)
+    if target is None:
+        raise RuntimeError("Selected pane no longer belongs to this layout")
+    # The subtree below the last left/right split is this pane's column.
+    # Do not resize a shared row ancestor: that would change adjacent columns.
+    column, prefix, node = root, (), root
+    for depth, side in enumerate(target):
+        child = node["second" if side else "first"]
+        if node["direction"] == "right":
+            column, prefix = child, tuple(target[:depth + 1])
+        node = child
+
+    changes = []
+
+    def visit(node, path):
+        if node["type"] == "pane":
+            return
+        if node["direction"] == "down":
+            ratio = balanced_ratio(node)
+            if tuple(target[:len(path)]) == path and len(path) < len(target):
+                ratio = 0.1 if target[len(path)] else 0.9
+            changes.append((path, ratio))
+        visit(node["first"], (*path, False))
+        visit(node["second"], (*path, True))
+
+    visit(column, prefix)
+    return changes
+
+
+def node_at(root, path):
+    for side in path:
+        root = root["second" if side else "first"]
+    return root
+
+
+def apply_plan(client, layout, changes):
+    expected = shape(layout["root"])
+    for path, ratio in changes:
+        # A split/close/move by the user invalidates path-based addressing.
+        current = client.call("layout.export", tab_id=layout["tab_id"])["layout"]
+        if shape(current["root"]) != expected:
+            raise RuntimeError("Layout changed during resize; stopped. Try again.")
+        if abs(node_at(current["root"], path)["ratio"] - ratio) < 0.00001:
+            continue
+        client.call("layout.set_split_ratio", tab_id=layout["tab_id"], path=list(path), ratio=ratio)
+
+
+def resize(client, pane_id, action):
+    layout = client.call("layout.export", pane_id=pane_id)["layout"]
+    if layout["zoomed"]:
+        client.call("pane.zoom", pane_id=pane_id, mode="off")
+    if action == "balance":
+        apply_plan(client, layout, balance_plan(layout["root"]))
+        return
+    if action != "focus":
+        neighbor = client.call("pane.neighbor", pane_id=pane_id, direction=action)["neighbor"]
+        pane_id = neighbor.get("neighbor_pane_id") or pane_id
+    layout = client.call("layout.export", pane_id=pane_id)["layout"]
+    apply_plan(client, layout, vertical_plan(layout["root"], pane_id))
+    client.call("pane.focus", pane_id=pane_id)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("balance", "focus", "left", "down", "up", "right"))
+    args = parser.parse_args()
+    pane_id = os.environ.get("HERDR_ACTIVE_PANE_ID")
+    path = os.environ.get("HERDR_SOCKET_PATH")
+    if not pane_id or not path:
+        raise RuntimeError("Run via a Herdr keybinding: active pane and socket are required")
+    # Serialize rapid shortcut invocations; never interleave our ratio plans.
+    lock_dir = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "herdr-layout"
+    lock_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    name = hashlib.sha256(path.encode()).hexdigest()[:24]
+    with (lock_dir / (name + ".lock")).open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        resize(Client(path), pane_id, args.action)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        print(f"Herdr layout: {error}", file=sys.stderr)
+        # Detached keybindings have no terminal for errors; surface them in Herdr.
+        if os.environ.get("HERDR_SOCKET_PATH"):
+            try:
+                Client(os.environ["HERDR_SOCKET_PATH"]).call(
+                    "notification.show", title="Pane resize failed", body=str(error), sound="none")
+            except Exception:
+                pass
+        sys.exit(1)
