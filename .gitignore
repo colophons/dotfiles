@@ -31,6 +31,12 @@ config/chawan/history.uri
 **/herdr/session.json
 **/herdr/release-notes.json
 
+# Nushell state, should a machine link the entire configuration directory.
+/config/nushell/history.txt
+/config/nushell/history.sqlite3*
+/config/nushell/plugin.msgpackz
+/config/nushell/autoload/
+
 # Python helper test imports.
 __pycache__/
 
