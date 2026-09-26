@@ -1,0 +1,32 @@
+{
+  "lastChangelogVersion": "0.87.1",
+  "theme": "dark",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6-astra",
+  "showCacheMissNotices": true,
+  "defaultProjectTrust": "ask",
+  "hideThinkingBlock": false,
+  "skills": [
+    "~/sys/skills/tko-ticket-discipline",
+    "~/sys/skills/wayfind",
+    "~/sys/skills/grilling",
+    "~/sys/skills/codebase-design",
+    "~/sys/skills/improve-codebase-architecture",
+    "~/sys/skills/formalism",
+    "~/sys/skills/rust-style",
+    "~/sys/skills/tutor"
+  ],
+  "packages": [
+    "npm:pi-web-search@1.5.0",
+    "../../pi-adhoc/handoff.ts",
+    "git:github.com/leblancfg/pi-ansi-themes",
+    "npm:pi-btw@0.4.1",
+    "git:github.com/engimatic-systems/pi-companion",
+    "git:github.com/colophons/pi-nushell"
+  ],
+  "defaultThinkingLevel": "high",
+  "terminal": {
+    "images": "kitty",
+    "imageWidthCells": 100
+  }
+}

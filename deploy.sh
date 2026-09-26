@@ -9,6 +9,8 @@ pushd "$DOTFILES"
 
 echo "beginning the deployment process !"
 
+stowcmd --no-folding pi
+echo
 stowcmd scripts
 echo
 stowcmd zsh

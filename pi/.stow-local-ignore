@@ -1,0 +1,3 @@
+# Traverse the two parent directories and deploy only settings.json.
+# Stow matches package-relative paths with a leading slash.
+^/(?!\.pi$|\.pi/agent$|\.pi/agent/settings\.json$).*

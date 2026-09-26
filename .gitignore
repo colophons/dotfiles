@@ -45,3 +45,9 @@ __pycache__/
 
 # unpacked font files
 fonts/IosevkaCustom
+
+# Pi: only the global settings file travels with this repository.
+/pi/.pi/*
+!/pi/.pi/agent/
+/pi/.pi/agent/*
+!/pi/.pi/agent/settings.json
